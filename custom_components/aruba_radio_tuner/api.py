@@ -167,7 +167,9 @@ def parse_ap_inventory(output: str) -> list[dict[str, str]]:
 
     text = _clean_cli(output)
     pattern = re.compile(
-        r"^(?P<name>[^\s]+)\s+(?P<ip>(?:\d{1,3}\.){3}\d{1,3})\s+"
+        # Instant marks the conductor's address with a trailing '*'. Keep the
+        # marker out of the stored IP so it remains a usable API target.
+        r"^(?P<name>[^\s]+)\s+(?P<ip>(?:\d{1,3}\.){3}\d{1,3})\*?\s+"
         r"(?P<mode>access|mesh)\s+(?P<spectrum>\S+)\s+(?P<clients>\d+)\s+(?P<model>\S+)",
         re.IGNORECASE,
     )

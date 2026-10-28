@@ -31,6 +31,8 @@ Defaults are start 8 dBm, maximum 13 dBm, 2 dB increments, channels 1/6/11, fixe
 
 The AP may enforce a lower power than requested. Each sample records the requested and reported live power/channel alongside observed clients, utilization, and noise. A `show aps` inventory parse that lacks the live radio fields prevents a run from changing anything.
 
+Instant marks the conductor row in `show aps` with `*` after its IP address (for example, `192.168.0.4*`). The app strips that marker while parsing so the conductor remains selectable as a normal AP address.
+
 ### Manual run
 
 Select **Run comparison**. The app captures the starting settings, runs the conditions, then restores the starting channel and power. It shows the recommendation and waits for **Apply recommendation**. Applying a recommendation is a separate deliberate action.

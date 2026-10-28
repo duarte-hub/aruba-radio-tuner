@@ -1,7 +1,7 @@
 name: "Aruba Radio Tuner"
 slug: "aruba_radio_tuner"
 description: "Standalone Aruba Instant 2.4 GHz power and channel optimizer"
-version: "0.2.1"
+version: "0.2.2"
 url: "https://github.com/duarte-hub/aruba-radio-tuner"
 arch:
   - aarch64
