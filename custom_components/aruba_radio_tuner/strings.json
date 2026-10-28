@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Aruba Instant",
+        "description": "Enter the Instant cluster conductor IP and API credentials. The API must already be enabled on the AP.",
+        "data": {
+          "host": "Cluster IP address",
+          "username": "API username",
+          "password": "API password",
+          "verify_ssl": "Validate the AP TLS certificate"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Login failed. Check the API username and password.",
+      "api_not_enabled": "The Instant REST API is not enabled on this cluster.",
+      "cannot_connect": "Could not connect or read the Instant version. Check the address, API status, and certificate setting."
+    },
+    "abort": {
+      "already_configured": "This Instant cluster is already configured."
+    }
+  }
+}

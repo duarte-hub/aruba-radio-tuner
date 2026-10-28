@@ -1,0 +1,187 @@
+start_test:
+  name: Start radio test
+  description: Run a 2.4 GHz power sweep, channel comparison, or combined sweep. The starting radio setting is restored after a manual run.
+  fields:
+    config_entry_id:
+      name: Aruba connection
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+    ap_ip:
+      name: Access point IP
+      required: true
+      selector:
+        text:
+    mode:
+      name: Test mode
+      required: true
+      selector:
+        select:
+          options:
+            - power
+            - channels
+            - combined
+    start_power_dbm:
+      name: Start power
+      default: 8
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: dBm
+    max_power_dbm:
+      name: Maximum power
+      default: 13
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: dBm
+    step_dbm:
+      name: Power increment
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          unit_of_measurement: dB
+    channel_test_power_dbm:
+      name: Channel comparison power
+      default: 13
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: dBm
+    channels:
+      name: Channels
+      default: [1, 6, 11]
+      selector:
+        select:
+          multiple: true
+          options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    recovery_seconds:
+      name: Client recovery timeout
+      default: 120
+      selector:
+        number:
+          min: 0
+          max: 900
+          step: 15
+          unit_of_measurement: seconds
+apply_recommendation:
+  name: Apply recommendation
+  description: Apply a saved run's recommended 2.4 GHz channel and power to its selected AP.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+    run_id:
+      required: true
+      selector:
+        text:
+schedule_test:
+  name: Schedule radio test
+  description: Schedule a complete test. Scheduled tests automatically apply the recommendation at the end.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+    ap_ip:
+      required: true
+      selector:
+        text:
+    mode:
+      required: true
+      selector:
+        select:
+          options: [power, channels, combined]
+    run_at:
+      name: Start at
+      required: true
+      selector:
+        datetime:
+    start_power_dbm:
+      default: 8
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+    max_power_dbm:
+      default: 13
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+    step_dbm:
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+    channel_test_power_dbm:
+      default: 13
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+    channels:
+      default: [1, 6, 11]
+      selector:
+        select:
+          multiple: true
+          options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    recovery_seconds:
+      default: 120
+      selector:
+        number:
+          min: 0
+          max: 900
+          step: 15
+          unit_of_measurement: seconds
+cancel_test:
+  name: Cancel active test
+  description: Cancel a test. The integration attempts to restore the starting radio setting.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+cancel_schedule:
+  name: Cancel scheduled test
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+    schedule_id:
+      required: true
+      selector:
+        text:
+delete_result:
+  name: Delete result
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+    run_id:
+      required: true
+      selector:
+        text:
