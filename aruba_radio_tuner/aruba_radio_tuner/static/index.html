@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Aruba Radio Tuner</title>
+    <link rel="stylesheet" href="./static/style.css">
+    <script defer src="./static/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#tune" aria-label="Aruba Radio Tuner home">
+        <span class="brand-mark">A</span><span><strong>ARUBA</strong><small>RADIO TUNER</small></span>
+      </a>
+      <div id="connection" class="connection"><i></i><span>Connecting…</span></div>
+    </header>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-label">WIRELESS</div>
+        <button class="side-link active" data-tab="tune"><span>⌁</span> Radio optimization</button>
+        <button class="side-link" data-tab="results"><span>▤</span> Results &amp; schedules</button>
+        <div class="side-foot">Instant · 2.4 GHz</div>
+      </aside>
+      <main>
+        <section class="page-heading">
+          <div><div class="eyebrow">ARUBA INSTANT / RADIO MANAGEMENT</div><h1 id="page-title">Radio optimization</h1><p>Compare 2.4 GHz power and channels on one AP.</p></div>
+          <div id="cluster-version" class="version-chip">Cluster · —</div>
+        </section>
+        <div id="notice" class="notice" hidden></div>
+        <section id="tune-page">
+          <div id="active-run"></div>
+          <div class="panel">
+            <div class="panel-heading"><div><h2>New comparison</h2><p>Only the selected AP’s 2.4 GHz radio is changed.</p></div><span class="step-badge">01</span></div>
+            <div class="form-grid">
+              <label class="field span-2"><span>Access point</span><select id="ap-select"><option>Loading APs…</option></select></label>
+              <label class="field"><span>Test type</span><select id="mode"><option value="power">Power sweep</option><option value="channels">Channel comparison</option><option value="combined">Combined channel × power</option></select></label>
+              <label class="field"><span>Client recovery timeout</span><div class="input-suffix"><input id="recovery" type="number" min="0" max="900" step="15" value="120"><span>sec</span></div></label>
+              <label class="field"><span>Starting power</span><div class="input-suffix"><input id="start" type="number" min="0" max="30" step="1" value="8"><span>dBm</span></div></label>
+              <label class="field"><span>Maximum power</span><div class="input-suffix"><input id="maximum" type="number" min="0" max="30" step="1" value="13"><span>dBm</span></div></label>
+              <label class="field"><span>Power increment</span><div class="input-suffix"><input id="step" type="number" min="1" max="10" step="1" value="2"><span>dB</span></div></label>
+              <label class="field"><span>Channel-only test power</span><div class="input-suffix"><input id="channel-power" type="number" min="0" max="30" step="1" value="13"><span>dBm</span></div></label>
+              <label class="field span-2"><span>Channels to compare</span><input id="channels" type="text" value="1, 6, 11"><small>Enter comma-separated 2.4 GHz channels. Defaults to 1, 6, and 11.</small></label>
+            </div>
+            <div id="estimate" class="estimate">Estimated duration —</div>
+            <div class="button-row">
+              <button id="run-now" class="button primary">Run comparison</button>
+              <button id="show-schedule" class="button secondary">Schedule</button>
+              <button id="cancel-run" class="button danger" hidden>Cancel test</button>
+            </div>
+            <div id="schedule-box" class="schedule-box" hidden>
+              <label class="field"><span>Start time (your device's local time)</span><input id="run-at" type="datetime-local"></label>
+              <button id="save-schedule" class="button primary">Save schedule</button>
+            </div>
+            <div class="safety-note"><strong>How it works</strong><span>Each setting is applied, then the app waits for 75% of baseline clients or the recovery timeout. Manual runs restore the starting setting and leave applying the recommendation to you. Scheduled runs auto-apply only when client recovery reaches that threshold.</span></div>
+          </div>
+        </section>
+        <section id="results-page" hidden>
+          <div class="panel"><div class="panel-heading"><div><h2>Scheduled tests</h2><p>Runs persist across app restarts.</p></div><span class="step-badge">02</span></div><div id="schedules"></div></div>
+          <div class="panel"><div class="panel-heading"><div><h2>Saved results</h2><p>Compare observations and apply a recommendation.</p></div></div><div id="results"></div></div>
+        </section>
+        <footer>Local connection to your Aruba Instant conductor · API credentials are stored in Home Assistant app configuration.</footer>
+      </main>
+    </div>
+  </body>
+</html>
