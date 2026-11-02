@@ -81,8 +81,9 @@ def suggest(
         if power is not None and loudest["signal_dbm"] > LOUD_DBM:
             # The neighbour is usually turned down too, so each side takes half the cut.
             drop = min(MAX_STEP_DB, math.ceil((loudest["signal_dbm"] - TARGET_DBM) / 2))
-            new_power = max(min_power_dbm, power - drop)
-            if new_power < power:
+            candidate = max(min_power_dbm, power - drop)
+            if candidate < power:
+                new_power = candidate
                 reasons.append(
                     f"{loudest['listener']} hears it at {loudest['signal_dbm']} dBm, which is very "
                     f"loud. Overlapping cells keep clients stuck on a distant AP. Reduce by "
@@ -90,12 +91,20 @@ def suggest(
                 )
         elif power is not None and loudest["signal_dbm"] < QUIET_DBM:
             gain = min(MAX_STEP_DB, math.ceil(RAISE_TARGET_DBM - loudest["signal_dbm"]))
-            new_power = min(max_power_dbm, power + gain)
-            if new_power > power:
+            candidate = min(max_power_dbm, power + gain)
+            if candidate > power:
+                new_power = candidate
                 reasons.append(
                     f"Its best neighbour ({loudest['listener']}) only hears it at "
                     f"{loudest['signal_dbm']} dBm. Clients may lose signal before they can roam. "
                     f"Raise by {new_power - power:g} dB."
+                )
+            else:
+                reasons.append(
+                    f"Its best neighbour ({loudest['listener']}) only hears it at "
+                    f"{loudest['signal_dbm']} dBm, but power is already at or above the "
+                    f"{max_power_dbm:g} dBm limit, so no change is suggested. Check the reading "
+                    f"or the AP placement."
                 )
 
         # Co-channel: another AP on the same channel is audible enough to share airtime.

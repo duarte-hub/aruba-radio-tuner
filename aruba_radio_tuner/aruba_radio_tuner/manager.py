@@ -13,7 +13,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from .api import ArubaApiError, ArubaInstantApi, parse_bss_table, parse_monitor_list, table_preview
+from .api import ArubaApiError, ArubaInstantApi, parse_bss_table, parse_monitor_list, table_preview, monitor_debug
 from .rrm import build_links, suggest
 
 _LOGGER = logging.getLogger(__name__)
@@ -125,11 +125,13 @@ class RunManager:
         bss_output = await self.api.async_get_bss_table()
         bss_map = parse_bss_table(bss_output, [ap["name"] for ap in aps])
         heard: dict[str, list[dict[str, Any]]] = {}
-        raw: dict[str, str] = {}
+        raw: dict[str, Any] = {}
+        debug: dict[str, Any] = {}
         for ap in aps:
             output = await self.api.async_get_monitor_list(ap["ip"])
             heard[ap["name"]] = parse_monitor_list(output)
             raw[ap["name"]] = table_preview(output)
+            debug[ap["name"]] = monitor_debug(output, bss_map, ap["name"])
         links = build_links(aps, bss_map, heard)
         diagnostics = None if links else (
             "No AP-to-AP signal readings could be parsed. This firmware's table layout may "
@@ -140,6 +142,13 @@ class RunManager:
             "links": links,
             "suggestions": suggest(aps, links, min_power_dbm=min_power_dbm, max_power_dbm=max_power_dbm),
             "diagnostics": diagnostics,
+            "debug": {
+                "bss_table_matched": {
+                    name: sum(1 for v in bss_map.values() if v["ap_name"] == name)
+                    for name in [ap["name"] for ap in aps]
+                },
+                "listeners": debug,
+            },
             "raw": {
                 "bss_table_aps_matched": len(bss_map),
                 "bss_table": table_preview(bss_output),

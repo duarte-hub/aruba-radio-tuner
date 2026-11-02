@@ -445,3 +445,44 @@ def parse_monitor_list(output: str) -> list[dict[str, Any]]:
                           "signal": value, "unit": unit})
             break
     return heard
+
+
+def monitor_debug(output: str, bss_map: dict[str, dict[str, Any]], listener: str) -> dict[str, Any]:
+    """Summarise one AP's monitor list: what it reports about other cluster APs.
+
+    Used for diagnostics so a surprising scan can be explained from the raw readings.
+    """
+    header, rows = _table_rows(output, "bssid")
+    lowered = [cell.lower() for cell in header]
+
+    def col(name: str) -> int | None:
+        return lowered.index(name) if name in lowered else None
+
+    band_i, essid_i, type_i = (
+        next((i for i, c in enumerate(lowered) if c.startswith("band/chan")), None),
+        col("essid"), col("ap-type"),
+    )
+    sig_cols = {name: col(name) for name in ("avg-snr", "curr-snr", "avg-rssi", "curr-rssi")}
+
+    def cell(cells: list[str], index: int | None) -> str:
+        return cells[index] if index is not None and index < len(cells) else ""
+
+    summary: dict[str, Any] = {"rows": len(rows), "rows_24ghz": 0, "own": 0, "other_aps": [], "unmatched_24ghz": []}
+    for cells in rows:
+        mac_match = _mac_re().search(" ".join(cells))
+        if not mac_match or not cell(cells, band_i).lower().startswith("2.4"):
+            continue
+        summary["rows_24ghz"] += 1
+        bssid = mac_match.group(0).lower()
+        signal = {name: cell(cells, i) for name, i in sig_cols.items()}
+        entry = {"bssid": bssid, "essid": cell(cells, essid_i), "band": cell(cells, band_i),
+                 "ap_type": cell(cells, type_i), **signal}
+        owner = bss_map.get(bssid)
+        if owner and owner["ap_name"] == listener:
+            summary["own"] += 1
+        elif owner:
+            summary["other_aps"].append({"ap": owner["ap_name"], **entry})
+        elif len(summary["unmatched_24ghz"]) < 8:
+            summary["unmatched_24ghz"].append(entry)
+    summary["other_aps"] = summary["other_aps"][:12]
+    return summary
