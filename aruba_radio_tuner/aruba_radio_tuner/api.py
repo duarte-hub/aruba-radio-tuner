@@ -338,21 +338,37 @@ def _find_column(header: list[str], *needles: str) -> int | None:
 def _table_rows(output: str, key: str) -> tuple[list[str], list[list[str]]]:
     """Return (header cells, data rows) for the table whose header contains `key`.
 
-    Instant's CLI tables are separated by two or more spaces, so columns are
-    identified by header name rather than fixed position. That tolerates firmware
-    differences in column order and extra columns.
+    Instant prints a header, then a row of dashes that starts at each column's left
+    edge. Those offsets slice every row, so empty cells and values containing single
+    spaces stay in the right column. Without a dash row, fall back to splitting on
+    runs of two or more spaces.
     """
+    import re
+
     lines = _clean_cli(output).splitlines()
     for index, line in enumerate(lines):
-        if key in line.lower() and not _mac_re().search(line):
-            header = _split_cells(line)
-            rows = []
-            for row in lines[index + 1 :]:
-                if set(row) <= set("- "):
-                    continue
-                rows.append(_split_cells(row))
+        if key not in line.lower() or _mac_re().search(line):
+            continue
+        dashes = lines[index + 1] if index + 1 < len(lines) else ""
+        starts = [m.start() for m in re.finditer(r"-+", dashes)] if "-" in dashes and set(dashes) <= set("- ") else []
+        if len(starts) >= 2:
+            ends = starts[1:] + [None]
+            header = [line[st:en].strip() for st, en in zip(starts, ends)]
+            rows = [
+                [row[st:en].strip() for st, en in zip(starts, ends)]
+                for row in lines[index + 2 :]
+                if row.strip() and not set(row) <= set("- ")
+            ]
             return header, rows
+        header = _split_cells(line)
+        return header, [_split_cells(row) for row in lines[index + 1 :] if not set(row) <= set("- ")]
     return [], []
+
+
+def table_preview(output: str, key: str = "bssid", rows: int = 4) -> dict[str, Any]:
+    """Header plus first data rows, for diagnostics when parsing fails."""
+    header, data = _table_rows(output, key)
+    return {"columns": header, "first_rows": data[:rows], "row_count": len(data), "head": _clean_cli(output)[:300]}
 
 
 def parse_bss_table(output: str, known_ap_names: list[str]) -> dict[str, dict[str, Any]]:
@@ -385,26 +401,45 @@ def parse_bss_table(output: str, known_ap_names: list[str]) -> dict[str, dict[st
 
 
 def parse_monitor_list(output: str) -> list[dict[str, Any]]:
-    """Parse nearby-AP rows: bssid, channel, and signal (dBm RSSI or dB SNR)."""
+    """Parse nearby-AP rows: bssid, 2.4 GHz channel and signal (dBm RSSI or dB SNR)."""
     header, rows = _table_rows(output, "bssid")
-    sig_col = _find_column(header, "rssi", "snr", "signal")
-    ch_col = _find_column(header, "chan", "ch")
+    lowered = [cell.lower() for cell in header]
+    # Prefer the instantaneous RSSI, then average RSSI, then SNR.
+    candidates = [
+        i for name in ("curr-rssi", "avg-rssi", "curr-snr", "avg-snr", "rssi", "snr", "signal")
+        for i, cell in enumerate(lowered) if cell == name
+    ]
+    band_col = next((i for i, cell in enumerate(lowered) if cell.startswith("band/chan")), None)
+    ch_col = next((i for i, cell in enumerate(lowered) if cell in ("chan", "channel", "ch")), None)
     heard: list[dict[str, Any]] = []
+    if not candidates:
+        return heard
     for cells in rows:
         mac_match = _mac_re().search(" ".join(cells))
-        if not mac_match or sig_col is None or sig_col >= len(cells):
+        if not mac_match:
             continue
-        raw = cells[sig_col].split("/")[0].split("(")[0]
-        value = _numeric(raw.strip())
-        if value is None:
-            continue
-        unit = "dbm" if value < 0 else "snr"
-        if value > 0 and "rssi" in header[sig_col].lower():
-            # Some firmware prints the dBm magnitude without the minus sign.
-            value, unit = -value, "dbm"
         channel = None
-        if ch_col is not None and ch_col < len(cells):
-            channel = _numeric(cells[ch_col].split("/")[0].rstrip("EeSsPp+-"))
-        heard.append({"bssid": mac_match.group(0).lower(), "channel": channel,
-                      "signal": value, "unit": unit})
+        source = cells[band_col] if band_col is not None and band_col < len(cells) else (
+            cells[ch_col] if ch_col is not None and ch_col < len(cells) else ""
+        )
+        parts = source.split("/")
+        if band_col is not None and len(parts) >= 2:
+            band = parts[0].strip().lower()
+            if band.startswith("5") or band.startswith("6") or band in ("a", "an", "ac", "ax5"):
+                continue  # only the 2.4 GHz radio is tuned here
+            channel = _numeric(parts[1].strip().rstrip("EeSsPp+-"))
+        elif parts and parts[0]:
+            channel = _numeric(parts[0].strip().rstrip("EeSsPp+-"))
+        for col in candidates:
+            if col >= len(cells):
+                continue
+            value = _numeric(cells[col].split("(")[0].strip())
+            if value is None:
+                continue
+            unit = "dbm" if value < 0 or "rssi" in lowered[col] else "snr"
+            if unit == "dbm" and value > 0:
+                value = -value  # some firmware prints the dBm magnitude without the sign
+            heard.append({"bssid": mac_match.group(0).lower(), "channel": channel,
+                          "signal": value, "unit": unit})
+            break
     return heard

@@ -13,7 +13,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from .api import ArubaApiError, ArubaInstantApi, parse_bss_table, parse_monitor_list
+from .api import ArubaApiError, ArubaInstantApi, parse_bss_table, parse_monitor_list, table_preview
 from .rrm import build_links, suggest
 
 _LOGGER = logging.getLogger(__name__)
@@ -122,13 +122,14 @@ class RunManager:
         aps = self.data["aps"]
         if len(aps) < 2:
             raise ValueError("At least two access points are needed to compare signal levels")
-        bss_map = parse_bss_table(await self.api.async_get_bss_table(), [ap["name"] for ap in aps])
+        bss_output = await self.api.async_get_bss_table()
+        bss_map = parse_bss_table(bss_output, [ap["name"] for ap in aps])
         heard: dict[str, list[dict[str, Any]]] = {}
         raw: dict[str, str] = {}
         for ap in aps:
             output = await self.api.async_get_monitor_list(ap["ip"])
             heard[ap["name"]] = parse_monitor_list(output)
-            raw[ap["name"]] = output[:600]
+            raw[ap["name"]] = table_preview(output)
         links = build_links(aps, bss_map, heard)
         diagnostics = None if links else (
             "No AP-to-AP signal readings could be parsed. This firmware's table layout may "
@@ -139,7 +140,11 @@ class RunManager:
             "links": links,
             "suggestions": suggest(aps, links, min_power_dbm=min_power_dbm, max_power_dbm=max_power_dbm),
             "diagnostics": diagnostics,
-            "raw": {"bss_table_aps_matched": len(bss_map), "monitor": raw} if diagnostics else None,
+            "raw": {
+                "bss_table_aps_matched": len(bss_map),
+                "bss_table": table_preview(bss_output),
+                "monitor": raw,
+            } if diagnostics else None,
         }
 
     async def apply_rrm_suggestion(self, ap_ip: str) -> None:
