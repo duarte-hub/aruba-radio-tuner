@@ -57,4 +57,5 @@ class ArubaRadioTunerSensor(SensorEntity):
             "results": self.manager.data.get("results", []),
             "schedules": self.manager.data.get("schedules", []),
             "last_error": self.manager.data.get("last_error"),
+            "rrm": self.manager.data.get("rrm"),
         }

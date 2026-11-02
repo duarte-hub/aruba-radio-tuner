@@ -15,8 +15,9 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .api import ArubaApiError, ArubaInstantApi
+from .api import ArubaApiError, ArubaInstantApi, parse_bss_table, parse_monitor_list
 from .const import STORAGE_KEY, STORAGE_VERSION
+from .rrm import build_links, suggest
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class ArubaRunManager:
             "recovery": None,
             "last_error": None,
             "api_version": "",
+            "rrm": None,
         }
         self._sensor_update: Callable[[], None] | None = None
         self._run_task: asyncio.Task[None] | None = None
@@ -353,6 +355,49 @@ class ArubaRunManager:
         result["applied_at"] = dt_util.utcnow().isoformat()
         await self.async_refresh()
         await self._async_save()
+
+    async def scan_neighbors(self, min_power_dbm: float = 6, max_power_dbm: float = 13) -> None:
+        """Read what every AP hears from the others and suggest radio tweaks (read-only)."""
+        if self._run_task and not self._run_task.done():
+            raise ValueError("Wait for the running radio test to finish before scanning")
+        await self.async_refresh()
+        aps = self.data["aps"]
+        if len(aps) < 2:
+            raise ValueError("At least two access points are needed to compare signal levels")
+        bss_map = parse_bss_table(await self.api.async_get_bss_table(), [ap["name"] for ap in aps])
+        heard: dict[str, list[dict[str, Any]]] = {}
+        raw_samples: dict[str, str] = {}
+        for ap in aps:
+            output = await self.api.async_get_monitor_list(ap["ip"])
+            heard[ap["name"]] = parse_monitor_list(output)
+            raw_samples[ap["name"]] = output[:600]
+        links = build_links(aps, bss_map, heard)
+        diagnostics = None
+        if not links:
+            diagnostics = (
+                "No AP-to-AP signal readings could be parsed. This firmware's table layout may "
+                "differ from what the parser expects; the raw output is included below."
+            )
+        self.data["rrm"] = {
+            "scanned_at": dt_util.utcnow().isoformat(),
+            "links": links,
+            "suggestions": suggest(aps, links, min_power_dbm=min_power_dbm, max_power_dbm=max_power_dbm),
+            "diagnostics": diagnostics,
+            "raw": {"bss_table_aps_matched": len(bss_map), "monitor": raw_samples} if diagnostics else None,
+        }
+        self._notify()
+
+    async def apply_rrm_suggestion(self, ap_ip: str) -> None:
+        rrm = self.data.get("rrm") or {}
+        item = next((s for s in rrm.get("suggestions", []) if s["ap_ip"] == ap_ip and s["change"]), None)
+        if not item:
+            raise ValueError("There is no pending suggestion for that access point")
+        await self.api.async_set_24ghz(
+            ap_ip, int(item["suggested_channel"]), float(item["suggested_power_dbm"])
+        )
+        item["applied_at"] = dt_util.utcnow().isoformat()
+        item["change"] = False
+        await self.async_refresh()
 
     async def schedule_test(self, config: dict[str, Any], run_at: str) -> str:
         _validate_config(config)

@@ -185,3 +185,44 @@ delete_result:
       required: true
       selector:
         text:
+scan_neighbors:
+  name: Scan AP neighbors
+  description: Read how loudly each access point hears the others and suggest 2.4 GHz power and channel tweaks for roaming. Read-only; nothing is changed.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+    min_power_dbm:
+      name: Minimum power
+      default: 6
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: dBm
+    max_power_dbm:
+      name: Maximum power
+      default: 13
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: dBm
+apply_rrm_suggestion:
+  name: Apply neighbor suggestion
+  description: Apply the suggested 2.4 GHz channel and power from the latest neighbor scan to one access point.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: aruba_radio_tuner
+    ap_ip:
+      name: Access point IP
+      required: true
+      selector:
+        text:

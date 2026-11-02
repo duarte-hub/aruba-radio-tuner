@@ -93,8 +93,8 @@ class ArubaRadioTunerCard extends HTMLElement {
       </style>
       <ha-card>
         <header><div class="brand"><div class="mark">A</div><div><h1>Aruba Radio Tuner</h1><div class="subtitle">Instant · 2.4 GHz radio optimization</div></div></div><span class="state">${esc(state.state)}</span></header>
-        <nav><button data-tab="tune" class="${this._tab === "tune" ? "active" : ""}">Radio tuning</button><button data-tab="results" class="${this._tab === "results" ? "active" : ""}">Results &amp; schedules</button></nav>
-        ${this._tab === "tune" ? this._renderTune(attrs, aps, active) : this._renderResults(attrs)}
+        <nav><button data-tab="tune" class="${this._tab === "tune" ? "active" : ""}">Radio tuning</button><button data-tab="roaming" class="${this._tab === "roaming" ? "active" : ""}">Roaming</button><button data-tab="results" class="${this._tab === "results" ? "active" : ""}">Results &amp; schedules</button></nav>
+        ${this._tab === "tune" ? this._renderTune(attrs, aps, active) : this._tab === "roaming" ? this._renderRoaming(attrs, aps, active) : this._renderResults(attrs)}
       </ha-card>`;
     this.shadowRoot.innerHTML = html;
     this.shadowRoot.querySelectorAll("nav button").forEach((button) => button.addEventListener("click", () => { this._captureForm(); this._tab = button.dataset.tab; this._render(); }));
@@ -129,6 +129,26 @@ class ArubaRadioTunerCard extends HTMLElement {
       <div class="actions"><button class="action" data-action="start" ${active ? "disabled" : ""}>Start test</button><button class="action secondary" data-action="schedule" ${active ? "disabled" : ""}>Schedule automatic test</button>${active ? `<button class="action danger" data-action="cancel">Cancel test</button>` : ""}</div>
       <div id="schedule-form" ${this._scheduleVisible ? "" : "hidden"} class="grid" style="margin-top:16px"><div class="field wide"><label for="run-at">Start time (your Home Assistant time zone)</label><input id="run-at" type="datetime-local" value="${esc(this._scheduleAt)}"></div><div class="actions wide"><button class="action" data-action="confirm-schedule">Save schedule</button></div></div>
       <p class="muted">Manual tests restore the starting setting and wait for you to apply the recommendation. Scheduled tests run unattended and apply their recommendation when at least 75% of baseline clients return; otherwise they restore the starting setting and mark the results for review.</p>
+    </main>`;
+  }
+
+  _renderRoaming(attrs, aps, active) {
+    const rrm = attrs.rrm;
+    const names = aps.map((ap) => ap.name);
+    const sigColour = (dbm) => dbm > -60 ? "hsl(0 60% 78%)" : dbm >= -72 ? "hsl(130 50% 76%)" : dbm >= -78 ? "hsl(45 70% 76%)" : "hsl(25 70% 74%)";
+    let matrix = "";
+    if (rrm?.links?.length) {
+      const link = (listener, speaker) => rrm.links.find((l) => l.listener === listener && l.speaker === speaker);
+      matrix = `<div class="panel"><h3>Who hears whom (dBm)</h3><div class="heat" style="grid-template-columns:auto repeat(${names.length},minmax(0,1fr))"><div class="axis">heard by ↓ / from →</div>${names.map((n) => `<div class="axis">${esc(n)}</div>`).join("")}${names.map((row) => `<div class="axis">${esc(row)}</div>` + names.map((col) => { if (row === col) return `<div class="none">·</div>`; const l = link(row, col); return l ? `<div style="background:${sigColour(l.signal_dbm)}" title="${esc(row)} hears ${esc(col)} at ${l.signal_dbm} dBm">${l.signal_dbm}</div>` : `<div class="none">–</div>`; }).join("")).join("")}</div><div class="legend"><span><i style="background:hsl(0 60% 78%)"></i>too loud (&gt; −60)</span><span><i style="background:hsl(130 50% 76%)"></i>good roaming overlap</span><span><i style="background:hsl(45 70% 76%)"></i>weak</span><span><i style="background:hsl(25 70% 74%)"></i>gap risk (&lt; −78)</span></div></div>`;
+    }
+    const cards = (rrm?.suggestions || []).map((s) => `<div class="result"><div class="result-body"><strong>${esc(s.ap_name)}</strong> <span class="muted">ch ${esc(s.channel)} · ${esc(s.power_dbm)} dBm${s.change ? ` → <b>ch ${esc(s.suggested_channel)} · ${esc(s.suggested_power_dbm)} dBm</b>` : ""}</span>${s.reasons.map((r) => `<div class="muted" style="margin-top:4px">${esc(r)}</div>`).join("")}${s.change ? `<div class="actions"><button class="action" data-action="apply-rrm" data-ip="${esc(s.ap_ip)}">Apply to ${esc(s.ap_name)}</button></div>` : ""}</div></div>`).join("");
+    return `<main>
+      ${attrs.last_error ? `<div class="banner error">${esc(attrs.last_error)}</div>` : ""}
+      <p class="muted" style="margin-top:0">Each AP reports how loudly it hears the others. Overlap that is too loud keeps clients stuck on a distant AP; too quiet leaves gaps they can't roam across. Scanning is read-only, and nothing changes until you press Apply on a suggestion.</p>
+      <div class="actions" style="margin-top:0"><button class="action" data-action="scan" ${active ? "disabled" : ""}>Scan AP neighbors</button></div>
+      ${rrm ? `<p class="muted">Last scan: ${esc(formatDate(rrm.scanned_at))}</p>` : `<div class="notice">No scan yet.</div>`}
+      ${rrm?.diagnostics ? `<div class="banner error">${esc(rrm.diagnostics)}<details><summary>Raw output</summary><pre style="white-space:pre-wrap;font-size:11px">${esc(JSON.stringify(rrm.raw, null, 2))}</pre></details></div>` : ""}
+      ${matrix}${cards}
     </main>`;
   }
 
@@ -208,6 +228,8 @@ class ArubaRadioTunerCard extends HTMLElement {
       if (!at.value) { const when = new Date(Date.now() + 3600000); when.setMinutes(0, 0, 0); at.value = `${when.getFullYear()}-${String(when.getMonth()+1).padStart(2,"0")}-${String(when.getDate()).padStart(2,"0")}T${String(when.getHours()).padStart(2,"0")}:${String(when.getMinutes()).padStart(2,"0")}`; }
       this._scheduleAt = at.value;
     });
+    root.querySelector('[data-action="scan"]')?.addEventListener("click", () => this._service("scan_neighbors", { config_entry_id: attrs.entry_id }));
+    root.querySelectorAll('[data-action="apply-rrm"]').forEach((button) => button.addEventListener("click", () => this._service("apply_rrm_suggestion", { config_entry_id: attrs.entry_id, ap_ip: button.dataset.ip })));
     root.querySelector('[data-action="confirm-schedule"]')?.addEventListener("click", () => this._start(true));
     root.querySelector('[data-action="cancel"]')?.addEventListener("click", () => this._service("cancel_test", { config_entry_id: attrs.entry_id }));
     root.querySelectorAll('[data-action="apply"]').forEach((button) => button.addEventListener("click", () => this._service("apply_recommendation", { config_entry_id: attrs.entry_id, run_id: button.dataset.id })));
@@ -253,7 +275,7 @@ class ArubaRadioTunerCard extends HTMLElement {
   async _service(name, data) {
     try {
       await this._hass.callService("aruba_radio_tuner", name, data);
-      this._notify(name === "start_test" ? "Test started." : name === "schedule_test" ? "Automatic test scheduled." : "Request sent.");
+      this._notify(name === "start_test" ? "Test started." : name === "schedule_test" ? "Automatic test scheduled." : name === "scan_neighbors" ? "Scanning AP neighbors…" : "Request sent.");
     } catch (error) {
       this._notify(error?.message || "Home Assistant could not run that action.");
     }

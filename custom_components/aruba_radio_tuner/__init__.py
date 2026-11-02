@@ -21,6 +21,8 @@ from .const import (
     SERVICE_CANCEL_SCHEDULE,
     SERVICE_CANCEL_TEST,
     SERVICE_DELETE_RESULT,
+    SERVICE_APPLY_RRM,
+    SERVICE_SCAN_NEIGHBORS,
     SERVICE_SCHEDULE,
     SERVICE_START_TEST,
     STATIC_URL,
@@ -60,6 +62,12 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def delete_result(call: ServiceCall) -> None:
         await manager_for(call).delete_result(call.data["run_id"])
 
+    async def scan_neighbors(call: ServiceCall) -> None:
+        await manager_for(call).scan_neighbors(call.data["min_power_dbm"], call.data["max_power_dbm"])
+
+    async def apply_rrm(call: ServiceCall) -> None:
+        await manager_for(call).apply_rrm_suggestion(call.data["ap_ip"])
+
     common = {vol.Required("config_entry_id"): str}
     test_fields = {
         **common,
@@ -79,6 +87,12 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
         SERVICE_CANCEL_TEST: vol.Schema(common),
         SERVICE_CANCEL_SCHEDULE: vol.Schema({**common, vol.Required("schedule_id"): str}),
         SERVICE_DELETE_RESULT: vol.Schema({**common, vol.Required("run_id"): str}),
+        SERVICE_SCAN_NEIGHBORS: vol.Schema({
+            **common,
+            vol.Optional("min_power_dbm", default=6): vol.Coerce(float),
+            vol.Optional("max_power_dbm", default=13): vol.Coerce(float),
+        }),
+        SERVICE_APPLY_RRM: vol.Schema({**common, vol.Required("ap_ip"): str}),
     }
     handlers = {
         SERVICE_START_TEST: start_test,
@@ -87,6 +101,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
         SERVICE_CANCEL_TEST: cancel_test,
         SERVICE_CANCEL_SCHEDULE: cancel_schedule,
         SERVICE_DELETE_RESULT: delete_result,
+        SERVICE_SCAN_NEIGHBORS: scan_neighbors,
+        SERVICE_APPLY_RRM: apply_rrm,
     }
     for name, handler in handlers.items():
         hass.services.async_register(DOMAIN, name, handler, schema=schemas[name])
