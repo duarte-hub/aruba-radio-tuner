@@ -16,6 +16,20 @@ _LOGGER = logging.getLogger("aruba_radio_tuner")
 ROOT = Path(__file__).parent
 
 
+def _app_version() -> str:
+    """Read the version from config.yaml, which the image copies next to the package."""
+    try:
+        for line in (ROOT.parent / "config.yaml").read_text().splitlines():
+            if line.startswith("version:"):
+                return line.split(":", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    return "unknown"
+
+
+APP_VERSION = _app_version()
+
+
 @web.middleware
 async def ingress_only(request: web.Request, handler):
     """Only accept requests forwarded by Home Assistant Ingress."""
@@ -68,7 +82,7 @@ def manager(request: web.Request) -> RunManager:
 
 async def get_state(request: web.Request) -> web.Response:
     state = await manager(request).refresh()
-    return web.json_response(state)
+    return web.json_response({**state, "app_version": APP_VERSION})
 
 
 async def start_test(request: web.Request) -> web.Response:
