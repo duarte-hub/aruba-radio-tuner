@@ -19,6 +19,10 @@ from .rrm import build_links, suggest
 _LOGGER = logging.getLogger(__name__)
 UTC = timezone.utc
 STATE_PATH = Path("/data/state.json")
+# After a radio change the AP needs time to switch and for clients to re-associate;
+# sampling immediately reads the previous state. The recovery timeout is the maximum.
+SETTLE_SECONDS = 20
+NO_CLIENT_DWELL_SECONDS = 30
 
 
 def utcnow() -> datetime:
@@ -263,16 +267,25 @@ class RunManager:
     async def _wait_and_sample(self, ap_ip: str, condition: dict[str, Any],
                                baseline_macs: set[str], timeout: int,
                                ap_name: str) -> dict[str, Any]:
-        deadline = utcnow() + timedelta(seconds=timeout)
+        began = utcnow()
+        deadline = began + timedelta(seconds=timeout)
         selected: dict[str, Any] = {}
         clients: list[dict[str, Any]] = []
+        # Let the AP apply the change before looking at anything.
+        await asyncio.sleep(min(SETTLE_SECONDS, timeout))
+        # With no baseline clients there is nothing to wait for, but utilization and noise
+        # still need a short dwell on the new setting to be meaningful.
+        earliest = began + timedelta(seconds=min(SETTLE_SECONDS if baseline_macs else NO_CLIENT_DWELL_SECONDS, timeout))
         while True:
             aps = await self.api.async_get_aps()
             selected = next((ap for ap in aps if ap["ip"] == ap_ip), {})
             clients = await self._read_clients(ap_ip, condition["channel"], ap_name)
             returned = len(baseline_macs & {str(row["mac"]).lower() for row in clients})
             required = math.ceil(len(baseline_macs) * 0.75) if baseline_macs else 0
-            if returned >= required or utcnow() >= deadline:
+            # The AP may clamp power, so only the channel proves the change took effect.
+            applied = _as_int(selected.get("channel24")) == int(condition["channel"])
+            now = utcnow()
+            if now >= deadline or (applied and returned >= required and now >= earliest):
                 break
             await asyncio.sleep(min(15, max(1, (deadline - utcnow()).total_seconds())))
         actual = _radio_state(selected)

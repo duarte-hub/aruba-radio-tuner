@@ -27,7 +27,7 @@ Choose an AP and one of three modes:
 - **Channel comparison:** tests the configured channels at one fixed power.
 - **Combined:** tests every configured power on every configured channel.
 
-Defaults are start 8 dBm, maximum 13 dBm, 2 dB increments, channels 1/6/11, fixed channel-test power 13 dBm, and 120 seconds of recovery. The app polls client state during the recovery interval and records a sample when at least 75% of baseline 2.4 GHz clients return or the timeout expires. A sweep is limited to 120 conditions.
+Defaults are start 8 dBm, maximum 13 dBm, 2 dB increments, channels 1/6/11, fixed channel-test power 13 dBm, and 120 seconds of recovery. After each change the app waits 20 seconds for the AP to switch and clients to re-associate, then polls until the AP reports the new channel and at least 75% of the baseline 2.4 GHz clients are back, or the recovery timeout expires. The timeout is therefore a maximum, not a fixed delay. With no baseline clients it still waits at least 30 seconds so utilization and noise are measured on the new setting. A sweep is limited to 120 conditions.
 
 The AP may enforce a lower power than requested. Each sample records the requested and reported live power/channel alongside observed clients, utilization, and noise. A `show aps` inventory parse that lacks the live radio fields prevents a run from changing anything.
 
