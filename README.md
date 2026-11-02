@@ -1,32 +1,77 @@
 # Aruba Radio Tuner
 
-A standalone Home Assistant app for comparing Aruba Instant 2.4 GHz radio settings. It runs as its own supervised container and provides a browser interface inside Home Assistant; no Lovelace card or Home Assistant integration setup is required.
+A Home Assistant integration (installed through HACS) with a dashboard card for tuning the 2.4 GHz radio of Aruba Instant access points. It compares power and channel settings against real client behaviour, and it can analyse how loudly your APs hear each other so you can improve roaming.
 
 ## Install
 
-This app requires Home Assistant OS with the Supervisor Apps feature. Add this repository under **Settings → Apps → Install app → ⋮ → Repositories**:
+1. In HACS, add this repository as a custom repository (type **Integration**): `https://github.com/duarte-hub/aruba-radio-tuner`.
+2. Install **Aruba Radio Tuner** and restart Home Assistant.
+3. Go to **Settings → Devices & services → Add integration → Aruba Radio Tuner**. Enter the Instant conductor IP, a write-capable management username and password. Certificate validation is off by default because APs normally use a self-signed certificate.
+4. Add the card as a dashboard resource (**Settings → Dashboards → ⋮ → Resources**), type **JavaScript module**:
 
-```text
-https://github.com/duarte-hub/aruba-radio-tuner
-```
+   ```text
+   /api/aruba_radio_tuner/static/aruba-radio-tuner-card.js
+   ```
 
-Install **Aruba Radio Tuner**, then open its **Configuration** tab and enter the Instant conductor IP, management username, and password. The default cluster IP is `192.168.0.25`; API certificate validation defaults off for Aruba's usual self-signed certificate. Save the options and start or restart the app. Use **Open Web UI** in the app page (or enable **Show in sidebar**).
+5. Add a card to a dashboard:
 
-The app connects to InstantOS over HTTPS on port 4343. Enable the REST API on the conductor AP first. It uses the app's stored configuration and Home Assistant Ingress for browser authentication; the app does not expose a host port.
+   ```yaml
+   type: custom:aruba-radio-tuner
+   entity: sensor.<your_radio_tuner_sensor>
+   ```
 
-## What it does
+Requirements: an Aruba Instant (AOS-8) cluster with the REST API enabled on the conductor AP (HTTPS port 4343). Read-only accounts cannot change radio settings. After updating, hard-refresh the browser so it loads the new card.
 
-- Power sweep, channel comparison, or combined channel × power sweep.
-- Defaults: 8–13 dBm in 2 dB increments, channels 1/6/11, and a 120-second client-recovery timeout. All are configurable per test.
-- Every radio write targets the chosen AP's 2.4 GHz radio only.
-- Manual tests restore the original channel and power, then show a recommendation for you to apply.
-- Scheduled tests run unattended and apply the recommendation only if at least 75% of the baseline clients return. Otherwise, the original setting is restored and the result is marked for review.
-- Runs, schedules, and results persist in the app's `/data` folder and survive app restarts.
+## Radio tuning
 
-Recommendations compare observed baseline client return, median PHY rate and signal, channel utilization, noise, and requested transmit power. They are a comparison aid, not a guarantee of best RF performance. The app records the live channel and power reported by Instant after each request because the AP can clamp requested power.
+Choose an AP and a mode:
 
-See [`aruba_radio_tuner/DOCS.md`](aruba_radio_tuner/DOCS.md) for setup and operation details.
+- **Power sweep:** tests power values on the AP's current 2.4 GHz channel.
+- **Channel comparison:** tests several channels at one fixed power.
+- **Combined:** tests every power on every channel.
 
-## Legacy HACS integration
+Defaults are 8–13 dBm in 2 dB steps, channels 1/6/11 and a 120-second client-recovery timeout; all are configurable per test, and a run is limited to 120 conditions. The tuner samples after at least 75% of the baseline 2.4 GHz clients return or the timeout expires. Each sample records the requested and live power and channel (the AP may clamp power), clients, utilization and noise.
 
-The earlier custom integration and Lovelace card remain in `custom_components/` for existing installations. They are separate from the app and are not required to use it. Do not install both to run tests; the standalone app handles its own API session, UI, schedules, and saved results.
+- **Manual runs** restore the starting channel and power, then show a recommendation for you to apply.
+- **Scheduled runs** apply the recommendation only if at least 75% of baseline clients return. Otherwise they restore the starting setting and mark the result for review.
+- Results show a channel × power heatmap, a per-condition chart and a score bar.
+
+Recommendations compare client return, median PHY rate and signal, utilization, noise and transmit power. They are a comparison aid, not a guarantee of best RF performance.
+
+## Roaming (AP-to-AP signal)
+
+The **Roaming** tab scans what each AP hears from the others and shows a "who hears whom" grid in dBm. It suggests a power or channel change per AP:
+
+- A neighbour hears it louder than −60 dBm: reduce power (overlap is too heavy and clients stay on a distant AP).
+- Its best neighbour hears it weaker than −78 dBm: raise power (a coverage gap clients cannot roam across).
+- Two APs share a channel at an audible level: move one to the quietest of 1/6/11.
+
+Scanning is read-only. Nothing changes until you press **Apply** on a suggestion. If the scan cannot parse your firmware's output, it shows the raw output so the parser can be adjusted.
+
+## Services
+
+| Service | Purpose |
+|---|---|
+| `aruba_radio_tuner.start_test` | Start a comparison run. |
+| `aruba_radio_tuner.schedule_test` | Schedule a run for a later time. |
+| `aruba_radio_tuner.apply_recommendation` | Apply a saved run's recommendation. |
+| `aruba_radio_tuner.cancel_test` / `cancel_schedule` | Cancel a running test or a pending schedule. |
+| `aruba_radio_tuner.delete_result` | Delete a saved result. |
+| `aruba_radio_tuner.scan_neighbors` | Read AP-to-AP signal levels and build suggestions. |
+| `aruba_radio_tuner.apply_rrm_suggestion` | Apply one AP's suggested channel and power. |
+
+## Safety and recovery
+
+- Every change targets one AP's 2.4 GHz radio. The 5 GHz radio is never touched; the integration does not use SSH or Aruba Central and does not enable the REST API for you.
+- Before the first test change, the starting channel and power are saved. If a run is cancelled, fails, or Home Assistant restarts mid-run, the integration restores them. If restoration fails, the card shows an error: check the AP.
+- Instant marks the conductor in `show aps` with `*` after its IP; the integration strips it so the conductor stays selectable.
+- The Instant REST server answers `503` when busy, so the integration sends commands one at a time and retries with a short back-off.
+- Schedules, results and recovery state are stored in Home Assistant's `.storage` and survive restarts. Credentials are never included in result data.
+
+## API notes
+
+The REST login payload and commands follow HPE's [Instant AOS-8.12 REST API Guide](https://arubanetworking.hpe.com/techdocs/Aruba-Instant-8.x-Books/812/Aruba-Instant-8.12.0.0-REST-API-Guide.pdf). Confirm radio writes on your own cluster before relying on unattended schedules.
+
+## Moving from the old standalone app
+
+Earlier versions also shipped a standalone Home Assistant app. It has been removed. Uninstall it in **Settings → Apps**, remove this repository from the app repositories list, and use the integration instead. The app's saved results do not carry over.
