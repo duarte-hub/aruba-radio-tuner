@@ -60,11 +60,11 @@ start_test:
           unit_of_measurement: dBm
     channels:
       name: Channels
-      default: [1, 6, 11]
+      default: ["1", "6", "11"]
       selector:
         select:
           multiple: true
-          options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+          options: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
     recovery_seconds:
       name: Client recovery timeout
       default: 120
@@ -139,11 +139,11 @@ schedule_test:
           max: 30
           step: 1
     channels:
-      default: [1, 6, 11]
+      default: ["1", "6", "11"]
       selector:
         select:
           multiple: true
-          options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+          options: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"]
     recovery_seconds:
       default: 120
       selector:

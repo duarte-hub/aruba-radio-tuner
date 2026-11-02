@@ -82,6 +82,13 @@ class ArubaRadioTunerCard extends HTMLElement {
         th { text-align:left;color:#536272;background:#f2f5f8;font-weight:600; } td,th { padding:8px 10px;border-bottom:1px solid #e3e8ed; } tr:last-child td { border-bottom:0; }
         .result { border:1px solid var(--aruba-line);border-radius:7px;margin:12px 0;overflow:hidden; } .result summary { cursor:pointer;padding:12px 14px;background:#f7f9fb;font-weight:600; }
         .result-body { padding:14px; } .right { text-align:right; } .notice { padding:12px;border:1px dashed #bdc9d4;border-radius:6px;color:#627282; }
+        .viz { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin:0 0 14px; } .viz h3 { margin:0 0 6px;font-size:12px;color:#526273;text-transform:uppercase;letter-spacing:.04em; }
+        .panel { border:1px solid var(--aruba-line);border-radius:6px;padding:10px 12px; } .heat { display:grid;gap:3px;font-size:11px;align-items:stretch; } .heat div { text-align:center;padding:6px 2px;border-radius:3px;min-height:20px; }
+        .heat .axis { color:#687786;font-weight:600;background:none;padding:6px 2px; } .heat .best { outline:2px solid var(--aruba-navy);outline-offset:-2px;font-weight:700; } .heat .none { background:#eef1f4;color:#9aa6b2; }
+        .legend { display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11px;color:#687786; } .legend i { display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px; }
+        .running { display:flex;align-items:center;gap:16px; } .ring { flex:none; } .ring text { fill:var(--aruba-navy);font-weight:700; }
+        svg.chart { width:100%;height:auto;display:block; } svg.chart text { fill:#687786;font-size:10px; }
+        @media(max-width:560px) { .viz { grid-template-columns:1fr; } }
         @media(max-width:560px) { .grid,.cards { grid-template-columns:1fr; } header,main { padding-left:14px;padding-right:14px; } }
       </style>
       <ha-card>
@@ -106,7 +113,7 @@ class ArubaRadioTunerCard extends HTMLElement {
     const estimatedMinutes = Math.ceil(testCount * Number(recovery) / 60);
     return `<main>
       ${attrs.last_error ? `<div class="banner error">${esc(attrs.last_error)}</div>` : ""}
-      ${active ? `<div class="banner"><strong>Test running:</strong> ${esc(active.step || "Working")} · ${active.completed || 0} of ${active.total || "…"}<div class="progress"><i style="width:${progress}%"></i></div><div class="muted">${active.baseline_clients ?? "—"} baseline 2.4 GHz clients · recovery timeout ${recovery}s</div></div>` : ""}
+      ${active ? `<div class="banner running">${ring(progress)}<div style="flex:1;min-width:0"><strong>Test running:</strong> ${esc(active.step || "Working")} · ${active.completed || 0} of ${active.total || "…"}<div class="progress"><i style="width:${progress}%"></i></div><div class="muted">${active.baseline_clients ?? "—"} baseline 2.4 GHz clients · recovery timeout ${recovery}s</div></div></div>` : ""}
       <div class="cards"><div class="metric"><strong>${esc(attrs.api_version ? "Connected" : "—")}</strong><span>Instant API · ${esc(attrs.api_version || "version unavailable")}</span></div><div class="metric"><strong>${aps.length}</strong><span>Access points discovered</span></div><div class="metric"><strong>${(attrs.results || []).length}</strong><span>Saved comparison runs</span></div></div>
       <div class="grid">
         <div class="field wide"><label for="ap">Access point (only this AP's 2.4 GHz radio is changed)</label><select id="ap">${apOptions || `<option value="">No AP inventory returned</option>`}</select></div>
@@ -140,7 +147,53 @@ class ArubaRadioTunerCard extends HTMLElement {
       return `<tr><td>${esc(sample.channel_requested)}</td><td>${esc(sample.power_requested_dbm)} / ${esc(sample.power_live_dbm ?? "—")}</td><td>${esc(sample.channel_live ?? "—")}</td><td>${esc(sample.client_count)}</td><td>${esc(sample.utilization_percent ?? "—")}</td><td>${esc(sample.noise_dbm ?? "—")}</td><td>${clientSummary}</td></tr>`;
     }).join("");
     const canApply = !run.applied && (rec.baseline_clients || 0) > 0;
-    return `<details class="result"><summary>${esc(run.ap_name)} · ${esc(run.mode)} · ${esc(formatDate(run.started_at))} · recommended ch ${esc(rec.channel)} @ ${esc(rec.power_dbm)} dBm ${run.applied ? "· applied" : ""}</summary><div class="result-body"><div class="banner ${run.applied ? "success" : ""}"><strong>Recommendation:</strong> channel ${esc(rec.channel)}, ${esc(rec.power_dbm)} dBm · score ${esc(rec.score)}<br><span class="muted">${esc(rec.confidence || "")}. ${esc(rec.reason || "")}</span>${canApply ? `<div class="actions"><button class="action" data-action="apply" data-id="${esc(run.id)}">Apply recommendation</button></div>` : ""}</div><div class="table-wrap"><table><thead><tr><th>Requested ch</th><th>Power requested / live</th><th>Channel live</th><th>Clients</th><th>Utilization</th><th>Noise</th><th>Client signal / PHY (dB / Mbps)</th></tr></thead><tbody>${samples}</tbody></table></div><div class="actions"><button class="action secondary" data-action="delete-result" data-id="${esc(run.id)}">Delete result</button></div></div></details>`;
+    return `<details class="result"><summary>${esc(run.ap_name)} · ${esc(run.mode)} · ${esc(formatDate(run.started_at))} · recommended ch ${esc(rec.channel)} @ ${esc(rec.power_dbm)} dBm ${run.applied ? "· applied" : ""}</summary><div class="result-body"><div class="banner ${run.applied ? "success" : ""}"><strong>Recommendation:</strong> channel ${esc(rec.channel)}, ${esc(rec.power_dbm)} dBm · score ${esc(rec.score)}<br><span class="muted">${esc(rec.confidence || "")}. ${esc(rec.reason || "")}</span>${canApply ? `<div class="actions"><button class="action" data-action="apply" data-id="${esc(run.id)}">Apply recommendation</button></div>` : ""}</div>${this._charts(run)}<div class="table-wrap"><table><thead><tr><th>Requested ch</th><th>Power requested / live</th><th>Channel live</th><th>Clients</th><th>Utilization</th><th>Noise</th><th>Client signal / PHY (dB / Mbps)</th></tr></thead><tbody>${samples}</tbody></table></div><div class="actions"><button class="action secondary" data-action="delete-result" data-id="${esc(run.id)}">Delete result</button></div></div></details>`;
+  }
+
+  _charts(run) {
+    const samples = run.samples || [];
+    if (!samples.length) return "";
+    const rec = run.recommendation || {};
+    const isBest = (x) => String(x.channel_requested) === String(rec.channel) && Number(x.power_requested_dbm) === Number(rec.power_dbm);
+    const base = rec.baseline_clients || run.baseline_clients || Math.max(...samples.map((x) => Number(x.client_count) || 0), 1);
+    // Heatmap: channel rows x power columns, colour = utilization, label = clients
+    const chans = [...new Set(samples.map((x) => x.channel_requested))].sort((a, b) => a - b);
+    const powers = [...new Set(samples.map((x) => Number(x.power_requested_dbm)))].sort((a, b) => a - b);
+    const cell = (ch, pw) => samples.find((x) => String(x.channel_requested) === String(ch) && Number(x.power_requested_dbm) === pw);
+    let heat = `<div class="axis"></div>` + powers.map((pw) => `<div class="axis">${pw} dBm</div>`).join("");
+    chans.forEach((ch) => {
+      heat += `<div class="axis">Ch ${esc(ch)}</div>`;
+      powers.forEach((pw) => {
+        const x = cell(ch, pw);
+        if (!x) { heat += `<div class="none">–</div>`; return; }
+        const u = Number(x.utilization_percent);
+        const colour = Number.isFinite(u) ? utilColour(u) : "#eef1f4";
+        heat += `<div class="${isBest(x) ? "best" : ""}" style="background:${colour}" title="Ch ${esc(ch)} @ ${pw} dBm: ${esc(x.client_count)}/${esc(base)} clients, ${esc(x.utilization_percent ?? "—")}% util, ${esc(x.noise_dbm ?? "—")} dBm noise">${esc(x.client_count)}/${esc(base)}</div>`;
+      });
+    });
+    // Bar chart: utilization (bars) + client return % (line) per condition
+    const W = 320, H = 130, L = 26, B = 28, T = 8, n = samples.length;
+    const bw = (W - L - 6) / n, ph = H - B - T;
+    let bars = "", line = [], labels = "";
+    samples.forEach((x, i) => {
+      const u = Math.min(100, Math.max(0, Number(x.utilization_percent) || 0));
+      const bx = L + i * bw + bw * 0.15, w = bw * 0.7, h = ph * u / 100;
+      bars += `<rect x="${bx.toFixed(1)}" y="${(T + ph - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${isBest(x) ? "#17324d" : "#0b73b7"}" opacity="${isBest(x) ? 1 : .55}"><title>Ch ${esc(x.channel_requested)} @ ${esc(x.power_requested_dbm)} dBm · ${esc(x.utilization_percent ?? "—")}% utilization</title></rect>`;
+      const ret = Math.min(1, (Number(x.client_count) || 0) / base);
+      line.push(`${(bx + w / 2).toFixed(1)},${(T + ph - ph * ret).toFixed(1)}`);
+      if (n <= 14 || i % Math.ceil(n / 14) === 0) labels += `<text x="${(bx + w / 2).toFixed(1)}" y="${H - 16}" text-anchor="middle">${esc(x.channel_requested)}</text><text x="${(bx + w / 2).toFixed(1)}" y="${H - 5}" text-anchor="middle">${esc(x.power_requested_dbm)}</text>`;
+    });
+    const grid = [0, 50, 100].map((v) => `<line x1="${L}" x2="${W}" y1="${T + ph - ph * v / 100}" y2="${T + ph - ph * v / 100}" stroke="#e3e8ed"/><text x="${L - 4}" y="${T + ph - ph * v / 100 + 3}" text-anchor="end">${v}</text>`).join("");
+    const dots = line.map((pt) => `<circle cx="${pt.split(",")[0]}" cy="${pt.split(",")[1]}" r="2.5" fill="#37884b"/>`).join("");
+    const chart = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Utilization and client return per condition">${grid}${bars}<polyline points="${line.join(" ")}" fill="none" stroke="#37884b" stroke-width="2"/>${dots}${labels}<text x="${L - 4}" y="${H - 16}" text-anchor="end">ch</text><text x="${L - 4}" y="${H - 5}" text-anchor="end">dBm</text></svg>`;
+    const score = Math.max(0, Math.min(100, Number(rec.score) || 0));
+    return `<div class="viz">
+      <div class="panel"><h3>Channel × power heatmap</h3><div class="heat" style="grid-template-columns:auto repeat(${powers.length},minmax(0,1fr))">${heat}</div>
+        <div class="legend"><span><i style="background:${utilColour(10)}"></i>low util</span><span><i style="background:${utilColour(50)}"></i>medium</span><span><i style="background:${utilColour(90)}"></i>high</span><span>cell = clients returned / baseline · outlined = recommended</span></div></div>
+      <div class="panel"><h3>Per-condition results</h3>${chart}
+        <div class="legend"><span><i style="background:#0b73b7"></i>utilization %</span><span><i style="background:#37884b"></i>client return</span><span><i style="background:#17324d"></i>recommended</span></div></div>
+    </div>
+    <div class="panel" style="margin-bottom:14px"><h3>Recommendation score</h3><svg class="chart" viewBox="0 0 320 22" role="img" aria-label="Score ${score}"><rect x="0" y="6" width="320" height="10" rx="5" fill="#e5ebf0"/><rect x="0" y="6" width="${(3.2 * score).toFixed(1)}" height="10" rx="5" fill="${score >= 66 ? "#37884b" : score >= 33 ? "#d49a1c" : "#b33a31"}"/></svg><div class="muted">${esc(rec.score)} / 100 · ${esc(rec.confidence || "")}</div></div>`;
   }
 
   _bindButtons(attrs) {
@@ -213,6 +266,15 @@ class ArubaRadioTunerCard extends HTMLElement {
 
 function esc(value) {
   return String(value ?? "—").replace(/[&<>"']/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[char]);
+}
+function ring(percent) {
+  const r = 26, c = 2 * Math.PI * r, off = c * (1 - Math.min(100, Math.max(0, percent)) / 100);
+  return `<svg class="ring" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="${percent}% complete"><circle cx="32" cy="32" r="${r}" fill="none" stroke="#e5ebf0" stroke-width="6"/><circle cx="32" cy="32" r="${r}" fill="none" stroke="#0b73b7" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="36" text-anchor="middle" font-size="13">${percent}%</text></svg>`;
+}
+function utilColour(u) {
+  const t = Math.min(1, Math.max(0, u / 100));
+  const hue = 130 - 130 * t; // green -> red
+  return `hsl(${hue.toFixed(0)} 55% 78%)`;
 }
 function formatDate(value) {
   if (!value) return "—";
