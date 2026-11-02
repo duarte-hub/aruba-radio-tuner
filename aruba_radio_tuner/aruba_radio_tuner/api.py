@@ -373,10 +373,12 @@ def table_preview(output: str, key: str = "bssid", rows: int = 4) -> dict[str, A
 
 def parse_bss_table(output: str, known_ap_names: list[str]) -> dict[str, dict[str, Any]]:
     """Map lowercase radio BSSID -> {ap_name, channel} for cluster members."""
-    header, rows = _table_rows(output, "bssid")
+    # The header's first column is "bss" (not "bssid"), and the flags legend below the
+    # table mentions "MBSSID", so anchor on the "ap name" column instead.
+    header, rows = _table_rows(output, "ap name")
     names = {name.lower(): name for name in known_ap_names}
     ap_col = _find_column(header, "ap name")
-    ch_col = _find_column(header, "ch")
+    ch_col = next((i for i, cell in enumerate(header) if cell.lower().startswith("ch/")), None)
     mapping: dict[str, dict[str, Any]] = {}
     for cells in rows:
         mac_match = _mac_re().search(" ".join(cells))
@@ -434,7 +436,7 @@ def parse_monitor_list(output: str) -> list[dict[str, Any]]:
             if col >= len(cells):
                 continue
             value = _numeric(cells[col].split("(")[0].strip())
-            if value is None:
+            if value is None or value == 0:  # 0 means "no reading" for this radio
                 continue
             unit = "dbm" if value < 0 or "rssi" in lowered[col] else "snr"
             if unit == "dbm" and value > 0:
