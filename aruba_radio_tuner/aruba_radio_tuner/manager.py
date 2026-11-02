@@ -122,8 +122,14 @@ class RunManager:
         aps = self.data["aps"]
         if len(aps) < 2:
             raise ValueError("At least two access points are needed to compare signal levels")
-        bss_output = await self.api.async_get_bss_table()
-        bss_map = parse_bss_table(bss_output, [ap["name"] for ap in aps])
+        names = [ap["name"] for ap in aps]
+        bss_map: dict[str, dict[str, Any]] = {}
+        bss_previews: dict[str, Any] = {}
+        for ap in aps:
+            # `show ap bss-table` only lists the BSSIDs of the AP it is run on.
+            bss_output = await self.api.async_get_bss_table(ap["ip"])
+            bss_map.update(parse_bss_table(bss_output, names))
+            bss_previews[ap["name"]] = table_preview(bss_output, "ap name")
         heard: dict[str, list[dict[str, Any]]] = {}
         raw: dict[str, Any] = {}
         debug: dict[str, Any] = {}
@@ -151,7 +157,7 @@ class RunManager:
             },
             "raw": {
                 "bss_table_aps_matched": len(bss_map),
-                "bss_table": table_preview(bss_output),
+                "bss_table": bss_previews,
                 "monitor": raw,
             } if diagnostics else None,
         }

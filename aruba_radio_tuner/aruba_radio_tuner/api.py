@@ -160,9 +160,9 @@ class ArubaInstantApi:
         output = await self.async_show(ap_ip, "show clients")
         return [{**row, "ap_ip": ap_ip} for row in parse_client_table(output)]
 
-    async def async_get_bss_table(self) -> str:
-        """Cluster-wide BSSID table; maps radio BSSIDs back to member APs."""
-        return await self.async_show(self.host, "show ap bss-table")
+    async def async_get_bss_table(self, ap_ip: str | None = None) -> str:
+        """BSSID table of one AP. Each AP lists only its own radios, so ask every AP."""
+        return await self.async_show(ap_ip or self.host, "show ap bss-table")
 
     async def async_get_monitor_list(self, ap_ip: str) -> str:
         """Raw list of nearby APs this AP hears, with signal strength."""
