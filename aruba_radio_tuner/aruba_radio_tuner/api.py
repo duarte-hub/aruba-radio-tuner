@@ -6,13 +6,24 @@ import asyncio
 import logging
 from typing import Any
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
 _LOGGER = logging.getLogger(__name__)
 
 
 _RETRY_STATUSES = (429, 502, 503, 504)
 _RETRY_DELAYS = (2, 5, 10)
+
+
+def _safe_error(err: Exception) -> str:
+    """Describe a transport error without the request URL, which carries the session ID."""
+    if isinstance(err, ClientResponseError):
+        return f"HTTP {err.status} {err.message}".strip()
+    if isinstance(err, asyncio.TimeoutError):
+        return "the request timed out"
+    if isinstance(err, ValueError):
+        return "the response was not valid JSON"
+    return type(err).__name__
 
 
 class ArubaApiError(Exception):
@@ -72,7 +83,7 @@ class ArubaInstantApi:
                             raise ArubaApiError("Instant API returned an unexpected response")
                         return body
             except (ClientError, asyncio.TimeoutError, ValueError) as err:
-                raise ArubaApiError(f"Instant API request failed: {err}") from err
+                raise ArubaApiError(f"Instant API request failed: {_safe_error(err)}") from None
             _LOGGER.debug("Instant API busy (%s); retrying in %ss", last_err, _RETRY_DELAYS[attempt])
             await asyncio.sleep(_RETRY_DELAYS[attempt])
         raise ArubaApiError(f"Instant API request failed: {last_err}")
